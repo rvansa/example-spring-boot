@@ -209,3 +209,24 @@ kubectl expose deployment example-spring-boot --type=NodePort --port=8080
 URL=$(minikube service example-spring-boot -n example --url)
 curl $URL
 ```
+
+## Building with Warp
+
+Azul Warp does not require any extra capabilities to perform neither checkpoint nor restore, therefore you can execute the build in single Dockerfile:
+
+```sh
+docker build -t example-spring-boot-warp -f Dockerfile.warp .
+# Start the example
+docker run -it --rm -p 8080:8080 example-spring-boot-warp
+```
+
+For building in Google Cloud Build, you can submit the build job and deploy it to Cloud Run with the commands below. With everything in the single Dockerfile you can see that the cloudbuild file is rather trivial.
+
+```sh
+gcloud builds submit --config cloudbuild-warp.yaml \
+    --service-account=projects/$PROJECT_ID/serviceAccounts/cloud-builder@$PROJECT_ID.iam.gserviceaccount.com
+gcloud run deploy example-spring-boot-warp  \
+    --image=us-west1-docker.pkg.dev/$PROJECT_ID/crac-examples/example-spring-boot-warp  \
+    --execution-environment=gen2 --allow-unauthenticated \
+    --service-account=cloud-runner@$PROJECT_ID.iam.gserviceaccount.com
+```

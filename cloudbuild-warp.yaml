@@ -1,0 +1,9 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  script: |
+    docker buildx build -f Dockerfile.warp -t us-west1-docker.pkg.dev/$PROJECT_ID/crac-examples/example-spring-boot-warp .
+  automapSubstitutions: true
+images:
+- us-west1-docker.pkg.dev/$PROJECT_ID/crac-examples/example-spring-boot-warp
+options:
+  logging: CLOUD_LOGGING_ONLY

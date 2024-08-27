@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.7-labs
+
+ARG BASE_IMAGE=azul/zulu-openjdk:23-jdk-crac-latest
+
+FROM $BASE_IMAGE AS builder
+ENV ENDPOINT=http://localhost:8080
+
+RUN apt-get update && apt-get install -y curl maven siege wget
+
+ADD . /example-spring-boot
+RUN cd /example-spring-boot && mvn -B install && mv target/example-spring-boot-0.0.1-SNAPSHOT.jar /example-spring-boot.jar
+
+RUN <<END_OF_SCRIPT
+#!/bin/bash
+
+$JAVA_HOME/bin/java -XX:CPUFeatures=generic -XX:CRaCEngine=warp -XX:CRaCCheckpointTo=/cr -jar /example-spring-boot.jar &
+PID=$!
+# Wait until the connection is opened
+until curl --output /dev/null --silent --head --fail $ENDPOINT; do
+    sleep 0.1
+done
+# Warm-up the server by executing 100k requests against it
+siege -c 1 -r 100000 -b $ENDPOINT
+# Do the checkpoint
+$JAVA_HOME/bin/jcmd /example-spring-boot.jar JDK.checkpoint
+# Wait until the process completes, returning success (wait would return exit code 137)
+wait $PID || true
+
+END_OF_SCRIPT
+
+FROM $BASE_IMAGE
+ENV PATH="$PATH:$JAVA_HOME/bin"
+
+COPY --from=builder /cr /cr
+COPY --from=builder /example-spring-boot.jar /example-spring-boot.jar
+CMD [ "java", "-XX:CRaCEngine=warp", "-XX:CRaCRestoreFrom=/cr" ]
