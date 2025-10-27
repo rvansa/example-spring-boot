@@ -8,27 +8,53 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @RestController
 public class HelloController {
-	private static long[] array;
+	// This will make us support up to 64 TB of data...
+	private static final int FIRST_LEVEL = 4096;
+	private static final int SHIFT = 31;
+	private static final long MAX_ARRAY_INDEX = (1L << SHIFT) - 1;
+	private static long[][] array;
+	private static long size;
 
 	@GetMapping("/")
 	public String index() {
 		return "Greetings from Spring Boot!";
 	}
 
+	private static long getValue(long index) {
+		return array[(int) (index >> SHIFT)][(int) (index & MAX_ARRAY_INDEX)];
+	}
+
 	@GetMapping("/init")
-	public String initMemory(@RequestParam(required = false) int size) {
-		if (size <= 0) {
-			size = Integer.MAX_VALUE/2;
-		} else if (size < 2) {
-			size = 2;
+	public String initMemory(@RequestParam(required = false) long size) {
+		if (size < 2) {
+			throw new IllegalArgumentException("You must set a size >= 2");
+		} else if (size >= FIRST_LEVEL * (MAX_ARRAY_INDEX + 1)) {
+			throw new IllegalArgumentException("Maximum size exceeded");
 		}
-		array = new long[size];
-		array[0] = 1;
-		array[1] = 1;
-		for (int i = 2; i < array.length; ++i) {
-			array[i] = array[i - 1] + array[i - 2];
+		HelloController.size = size;
+		array = new long[FIRST_LEVEL][];
+		for (int i = 0; i < array.length; ++i) {
+			long[] curr = array[i] = new long[(int) Math.min(size, MAX_ARRAY_INDEX + 1)];
+			if (i == 0) {
+				curr[0] = 1;
+				curr[1] = 1;
+			} else {
+				long[] prev = array[i - 1];
+				if (size >= 1) {
+					curr[0] = prev[prev.length - 2] + prev[prev.length - 1];
+					System.out.println("curr0 " + curr[0]);
+				}
+				if (size >= 2) {
+					curr[1] = curr[0] + prev[prev.length - 1];
+					System.out.println("curr1 " + curr[1]);
+				}
+			}
+			for (int j = 2; j < curr.length; ++j) {
+				curr[j] = curr[j - 1] + curr[j - 2];
+			}
+			size -= curr.length;
 		}
-		return String.valueOf(array[array.length - 1]);
+		return String.valueOf(getValue(HelloController.size - 1));
 	}
 
 	@GetMapping("/random")
@@ -39,7 +65,8 @@ public class HelloController {
 		long sum = 0;
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		for (int i = 0; i < reads; i++) {
-			sum += array[random.nextInt(array.length)];
+			long index = random.nextLong(0, Long.MAX_VALUE) % size;
+			sum += getValue(index);
 		}
 		return String.valueOf(sum);
 	}
@@ -50,8 +77,10 @@ public class HelloController {
 			return null;
 		}
 		long sum = 0;
-		for (int i = 0; i < array.length; i++) {
-			sum += array[i];
+		for (int i = 0; i < array.length; ++i) {
+			for (int j = 0; j < array[i].length; ++j) {
+				sum += array[i][j];
+			}
 		}
 		return String.valueOf(sum);
 	}
@@ -62,8 +91,9 @@ public class HelloController {
 			return null;
 		}
 		long sum = 0;
-		for (int i = 0; i < array.length; i += Math.max(array.length / reads, 1)) {
-			sum += array[i];
+		long stride = Math.max(size / reads, 1);
+		for (long i = 0; i < size; i += stride) {
+			sum += getValue(i);
 		}
 		return String.valueOf(sum);
 	}
