@@ -10,7 +10,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class HelloController {
 	// This will make us support up to 64 TB of data...
 	private static final int FIRST_LEVEL = 4096;
-	private static final int SHIFT = 31;
+	private static final int SHIFT = 30;
 	private static final long MAX_ARRAY_INDEX = (1L << SHIFT) - 1;
 	private static long[][] array;
 	private static long size;
